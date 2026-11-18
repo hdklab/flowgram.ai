@@ -9,7 +9,7 @@ desktop_app="$root/apps/desktop"
 data_home="${XDG_DATA_HOME:-$HOME/.local/share}"
 desktop_dir="$(xdg-user-dir DESKTOP 2>/dev/null || printf '%s/Desktop' "$HOME")"
 install_dir="$data_home/flowgram"
-backend="${FLOWGRAM_GDK_BACKEND:-}"
+backend="${FLOWGRAM_GDK_BACKEND:-x11}"
 
 case "$backend" in
   ""|x11|wayland) ;;
@@ -33,13 +33,9 @@ else
   target="$install_dir/FlowGram.AppImage"
 fi
 
-prefix=""
-if [ "$backend" = "wayland" ]; then
-  # X11 scaling workarounds distort Wayland hit-testing.
-  prefix="env -u GDK_SCALE -u GDK_DPI_SCALE FLOWGRAM_GDK_BACKEND=wayland "
-elif [ "$backend" = "x11" ]; then
-  prefix="env FLOWGRAM_GDK_BACKEND=x11 "
-fi
+# GDK_SCALE/GDK_DPI_SCALE are X11-only HiDPI workarounds; with the compositor
+# scaling the window they shift pointer hit-testing, so drop them for the app.
+prefix="env -u GDK_SCALE -u GDK_DPI_SCALE FLOWGRAM_GDK_BACKEND=$backend "
 
 entry() {
   cat <<EOF

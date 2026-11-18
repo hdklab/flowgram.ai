@@ -179,11 +179,11 @@ node ../../common/scripts/install-run-rushx.js desktop:build:linux
 Linux 安装把 GUI 与两个 sidecar 放在 `/usr/bin/`。也可以在桌面和应用菜单创建用户级启动器，无需 sudo：
 
 ```sh
-bash scripts/install-linux.sh
-FLOWGRAM_GDK_BACKEND=x11 bash scripts/install-linux.sh   # 需要切换 GTK 后端时
+bash scripts/install-linux.sh                             # 默认 X11 后端
+FLOWGRAM_GDK_BACKEND=wayland bash scripts/install-linux.sh
 ```
 
-脚本优先使用已安装的 `flowgram-desktop`；否则把 `target/release/bundle/appimage/` 中的 AppImage 复制到 `~/.local/share/flowgram/`，并写入 `~/.local/share/applications/flowgram-desktop.desktop` 与 `~/Desktop/FlowGram.desktop`。使用 wayland 后端时会移除仅适用于 X11 的 `GDK_SCALE` / `GDK_DPI_SCALE`，避免 Wayland 下的命中位置偏移。启动时依次在 GUI 同级目录和 Tauri 资源目录查找后端，也可用 `FLOWGRAM_SERVER_BIN` 指定。应用数据位于 `~/.local/share/ai.flowgram.desktop`，模型凭证只写入该目录，启动诊断写入其中的 `backend.log`，不会将项目或密钥打进安装包。
+脚本优先使用已安装的 `flowgram-desktop`；否则把 `target/release/bundle/appimage/` 中的 AppImage 复制到 `~/.local/share/flowgram/`，并写入 `~/.local/share/applications/flowgram-desktop.desktop` 与 `~/Desktop/FlowGram.desktop`。启动器会移除仅适用于 X11 的 `GDK_SCALE` / `GDK_DPI_SCALE`：它们与合成器的分数缩放叠加后会让指针命中位置偏移，表现为界面点不动。启动时依次在 GUI 同级目录和 Tauri 资源目录查找后端，也可用 `FLOWGRAM_SERVER_BIN` 指定。应用数据位于 `~/.local/share/ai.flowgram.desktop`，模型凭证只写入该目录，启动诊断写入其中的 `backend.log`，不会将项目或密钥打进安装包。
 
 部分 NVIDIA 驱动、Wayland 组合或远程桌面下，WebKitGTK 的 DMA-BUF 渲染可能显示空白画布；此时以 `FLOWGRAM_WEBKIT_COMPAT=1 flowgram-desktop` 启动，切换到兼容渲染路径。若窗口显示正常但界面点击无响应，可切换 GTK 后端：`FLOWGRAM_GDK_BACKEND=x11 flowgram-desktop` 或 `FLOWGRAM_GDK_BACKEND=wayland flowgram-desktop`，不同合成器下 WebKitGTK 的指针事件可能只在其中一个后端可用。GUI 正常退出时由应用主动结束后端，异常终止时由内核通过 `PR_SET_PDEATHSIG` 结束后端，均不会残留数据目录锁。
 
