@@ -178,7 +178,7 @@ node ../../common/scripts/install-run-rushx.js desktop:build:linux
 
 Linux 安装把两个 sidecar 放在 `/usr/lib/FlowGram/`，GUI 位于 `/usr/bin/flowgram-desktop`。启动时依次在 GUI 同级目录和 Tauri 资源目录查找后端，也可用 `FLOWGRAM_SERVER_BIN` 指定。应用数据位于 `~/.local/share/ai.flowgram.desktop`，模型凭证只写入该目录，启动诊断写入其中的 `backend.log`，不会将项目或密钥打进安装包。
 
-部分 NVIDIA 驱动、Wayland 组合或远程桌面下，WebKitGTK 的 DMA-BUF 渲染可能显示空白画布；此时以 `FLOWGRAM_WEBKIT_COMPAT=1 flowgram-desktop` 启动，切换到兼容渲染路径。GUI 正常退出或异常终止时，后端通过 `PR_SET_PDEATHSIG` 同步结束，不会残留数据目录锁。
+部分 NVIDIA 驱动、Wayland 组合或远程桌面下，WebKitGTK 的 DMA-BUF 渲染可能显示空白画布；此时以 `FLOWGRAM_WEBKIT_COMPAT=1 flowgram-desktop` 启动，切换到兼容渲染路径。若窗口显示正常但界面点击无响应，可切换 GTK 后端：`FLOWGRAM_GDK_BACKEND=x11 flowgram-desktop` 或 `FLOWGRAM_GDK_BACKEND=wayland flowgram-desktop`，不同合成器下 WebKitGTK 的指针事件可能只在其中一个后端可用。GUI 正常退出时由应用主动结束后端，异常终止时由内核通过 `PR_SET_PDEATHSIG` 结束后端，均不会残留数据目录锁。
 
 验收应覆盖：首次示例初始化、中文与空格路径、保存与重新打开、运行与历史画布、项目导入导出、归档恢复、单实例、深浅主题、画布缩放与高 DPI，以及正常退出和强制结束后的后台进程清理。
 

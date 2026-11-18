@@ -133,9 +133,23 @@ fn apply_linux_webview_compat() {
     }
 }
 
+#[cfg(target_os = "linux")]
+fn apply_linux_backend_override() {
+    // Some compositors deliver no pointer events to WebKitGTK on Wayland, while
+    // others break under XWayland. Let users pick the GTK backend explicitly.
+    if let Ok(backend) = std::env::var("FLOWGRAM_GDK_BACKEND")
+        && !backend.is_empty()
+    {
+        unsafe { std::env::set_var("GDK_BACKEND", backend) };
+    }
+}
+
 fn main() {
     #[cfg(target_os = "linux")]
-    apply_linux_webview_compat();
+    {
+        apply_linux_backend_override();
+        apply_linux_webview_compat();
+    }
     tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|app, _, _| {
             if let Some(window) = app.get_webview_window("main") {
