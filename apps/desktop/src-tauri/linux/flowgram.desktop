@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=FlowGram
+Comment=Workflow desktop workbench
+Exec=flowgram-desktop
+Icon=flowgram-desktop
+Terminal=false
+Categories=Development;Utility;
+Keywords=workflow;agent;AI;
+StartupWMClass=flowgram-desktop

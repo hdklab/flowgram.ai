@@ -34,20 +34,51 @@ impl Drop for Backend {
 fn backend_connection(backend: tauri::State<'_, Backend>) -> Connection {
     backend.connection.clone()
 }
+
+/// Locate the packaged backend sidecar for every install layout.
+///
+/// macOS and Windows bundles keep sidecars beside the GUI binary, while Linux
+/// deb/rpm/AppImage bundles install them into the resource directory
+/// (`/usr/lib/FlowGram` or `$APPDIR/usr/lib/FlowGram`).
+fn resolve_backend(app: &tauri::App) -> Result<PathBuf, Box<dyn std::error::Error>> {
+    if let Some(configured) = std::env::var_os("FLOWGRAM_SERVER_BIN") {
+        return Ok(PathBuf::from(configured));
+    }
+    let name = if cfg!(windows) {
+        "flowgram-server.exe"
+    } else {
+        "flowgram-server"
+    };
+    let mut candidates = Vec::new();
+    if let Ok(executable) = std::env::current_exe()
+        && let Some(directory) = executable.parent()
+    {
+        candidates.push(directory.join(name));
+    }
+    if let Ok(resources) = app.path().resource_dir() {
+        candidates.push(resources.join(name));
+    }
+    if let Some(found) = candidates.iter().find(|candidate| candidate.is_file()) {
+        return Ok(found.clone());
+    }
+    Err(format!(
+        "FlowGram backend executable {name} was not found; set FLOWGRAM_SERVER_BIN or install the complete bundle (searched: {})",
+        candidates
+            .iter()
+            .map(|candidate| candidate.display().to_string())
+            .collect::<Vec<_>>()
+            .join(", ")
+    )
+    .into())
+}
+
 fn start_backend(app: &tauri::App) -> Result<Backend, Box<dyn std::error::Error>> {
     let dir = std::env::var_os("FLOWGRAM_DATA_DIR")
         .map(PathBuf::from)
         .map(Ok)
         .unwrap_or_else(|| app.path().app_data_dir())?;
     std::fs::create_dir_all(&dir)?;
-    let executable = std::env::current_exe()?
-        .parent()
-        .ok_or("Application executable directory is unavailable")?
-        .join(if cfg!(windows) {
-            "flowgram-server.exe"
-        } else {
-            "flowgram-server"
-        });
+    let executable = resolve_backend(app)?;
     let connection_file = dir.join("connection.json");
     if connection_file.exists() {
         std::fs::remove_file(&connection_file)?;
@@ -91,7 +122,20 @@ fn start_backend(app: &tauri::App) -> Result<Backend, Box<dyn std::error::Error>
     }
     Err("FlowGram backend did not become ready".into())
 }
+
+#[cfg(target_os = "linux")]
+fn apply_linux_webview_compat() {
+    // WebKitGTK's DMA-BUF renderer draws an empty surface on some NVIDIA and
+    // remote-desktop setups. Keep hardware rendering by default and let users
+    // opt into the compatible path with FLOWGRAM_WEBKIT_COMPAT=1.
+    if std::env::var_os("FLOWGRAM_WEBKIT_COMPAT").is_some_and(|value| value != "0") {
+        unsafe { std::env::set_var("WEBKIT_DISABLE_DMABUF_RENDERER", "1") };
+    }
+}
+
 fn main() {
+    #[cfg(target_os = "linux")]
+    apply_linux_webview_compat();
     tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|app, _, _| {
             if let Some(window) = app.get_webview_window("main") {

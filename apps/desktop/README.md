@@ -150,17 +150,50 @@ Windows 共运行 118 项 Rust 测试；修复后复测受影响的导入、删�
 
 最终安装包的真实后端另通过 [Windows 验收脚本](../desktop-backend/validation/windows_desktop.py)：六个项目、18 个工作流、294 个节点、11 个离线流程重跑、中文与空格路径、工作流保存与历史图快照、归档恢复、带历史导入导出、项目重命名、重新打开与完整名称确认删除均通过。重新启动后保留 18 个会话和 40 次运行，MCP 初始化正常。Windows 本轮未配置真实模型连接；Windows 11 尚未单独实机验收。
 
+### Linux
+
+支持 Debian / Ubuntu 与 Fedora / RHEL 系 x64 发行版，使用同一前端、独立 Rust 后端、工作流运行时和普通项目格式。安装包内含 `flowgram-desktop`、`flowgram-server` 与 `flowgram-service`，由系统 WebKitGTK 渲染；安装和运行无需 Node.js 或 Rust。窗口使用桌面原生装饰，快捷键同时接受 `Ctrl` 与 `⌘`。
+
+运行环境：
+
+- Debian / Ubuntu：`libwebkit2gtk-4.1-0`、`libgtk-3-0`、`librsvg2-2`，安装 deb 时由包管理器解析。
+- Fedora / RHEL：`webkit2gtk4.1`、`gtk3`、`librsvg2`。
+- AppImage 需要 `libfuse2`；无法安装时可运行 `./FlowGram_0.1.0_amd64.AppImage --appimage-extract-and-run`。
+
+编译环境除 Node.js / pnpm / Rust stable 外还需要：
+
+```sh
+sudo apt install libwebkit2gtk-4.1-dev libgtk-3-dev librsvg2-dev \
+  libssl-dev libxdo-dev patchelf rpm libfuse2
+```
+
+在本目录构建：
+
+```sh
+node ../../common/scripts/install-run-rushx.js build
+node ../../common/scripts/install-run-rushx.js desktop:build:linux
+```
+
+产物位于 `target/release/bundle/`：`deb/FlowGram_0.1.0_amd64.deb`、`rpm/FlowGram-0.1.0-1.x86_64.rpm`、`appimage/FlowGram_0.1.0_amd64.AppImage`。`desktop:build` 使用各平台默认目标，Linux 下由 `tauri.linux.conf.json` 指定为 `deb,rpm,appimage`。
+
+Linux 安装把两个 sidecar 放在 `/usr/lib/FlowGram/`，GUI 位于 `/usr/bin/flowgram-desktop`。启动时依次在 GUI 同级目录和 Tauri 资源目录查找后端，也可用 `FLOWGRAM_SERVER_BIN` 指定。应用数据位于 `~/.local/share/ai.flowgram.desktop`，模型凭证只写入该目录，启动诊断写入其中的 `backend.log`，不会将项目或密钥打进安装包。
+
+部分 NVIDIA 驱动、Wayland 组合或远程桌面下，WebKitGTK 的 DMA-BUF 渲染可能显示空白画布；此时以 `FLOWGRAM_WEBKIT_COMPAT=1 flowgram-desktop` 启动，切换到兼容渲染路径。GUI 正常退出或异常终止时，后端通过 `PR_SET_PDEATHSIG` 同步结束，不会残留数据目录锁。
+
+验收应覆盖：首次示例初始化、中文与空格路径、保存与重新打开、运行与历史画布、项目导入导出、归档恢复、单实例、深浅主题、画布缩放与高 DPI，以及正常退出和强制结束后的后台进程清理。
+
 ## GitHub Actions 安装包流水线
 
 [Desktop Build](../../.github/workflows/desktop-build.yml) 在桌面、Rust 后端、共享库及构建配置相关的 PR / main 提交时执行，支持合并队列，也可在 GitHub 的 Actions → Desktop Build → Run workflow 手动选择分支运行。
 
-三个原生 GitHub 托管 runner 分别构建安装包，不依赖私人编译机、SSH、本机服务或本地数据：
+macOS 与 Windows 使用三个原生 GitHub 托管 runner 构建可发布安装包，Linux x64 由独立的 `ubuntu-22.04` 任务构建 `.deb` / `.rpm` / `.AppImage`，只上传 Actions 产物、不写入桌面预览通道；全部构建均不依赖私人编译机、SSH、本机服务或本地数据：
 
 | 平台 | Runner | 下载产物 |
 | --- | --- | --- |
 | macOS Apple Silicon | `macos-15` | `FlowGram-aarch64-apple-darwin`，包含 `.dmg` |
 | macOS Intel | `macos-15-intel` | `FlowGram-x86_64-apple-darwin`，包含 `.dmg` |
 | Windows x64 | `windows-2022` | `FlowGram-x86_64-pc-windows-msvc`，包含 `-setup.exe` |
+| Linux x64 | `ubuntu-22.04` | `FlowGram-x86_64-unknown-linux-gnu`，包含 `.deb` / `.rpm` / `.AppImage`（仅 Actions 产物） |
 
 流水线使用 Node.js 22、仓库指定的 Rush / pnpm、Rust 1.97.0 stable，以及已提交的 pnpm / Cargo 锁文件。先构建桌面所需的共享库，再运行前端单测与 lint、Rust Clippy 与后端 / 工作流运行时测试，最后打包 GUI 和两个原生 Rust sidecar。Rust 测试串行执行，避免多份首次示例初始化争抢磁盘；缓存按平台和架构隔离。
 
@@ -171,7 +204,7 @@ Windows 共运行 118 项 Rust 测试；修复后复测受影响的导入、删�
 本地复查流水线脚本（先完成对应平台打包）：
 
 ```sh
-# 仓库根目录；Windows 设为 x86_64-pc-windows-msvc
+# 仓库根目录；Windows 设为 x86_64-pc-windows-msvc，Linux 设为 x86_64-unknown-linux-gnu
 DESKTOP_TARGET=aarch64-apple-darwin python3 .github/scripts/desktop-smoke.py
 DESKTOP_TARGET=aarch64-apple-darwin DESKTOP_ARTIFACT_DIR=.flowgram-local/ci-artifacts node .github/scripts/desktop-artifacts.mjs
 ```

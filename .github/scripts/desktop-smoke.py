@@ -10,10 +10,12 @@ import time
 from urllib.request import Request, urlopen
 
 
-def verify(directory, data):
+def verify(directory, data, sidecars=None):
     suffix = '.exe' if os.name == 'nt' else ''
+    sidecars = sidecars or directory
     for name in ('flowgram-desktop', 'flowgram-server', 'flowgram-service'):
-        assert (directory / (name + suffix)).is_file(), f'Missing bundled binary: {name}'
+        base = directory if name == 'flowgram-desktop' else sidecars
+        assert (base / (name + suffix)).is_file(), f'Missing bundled binary: {name}'
     env = {**os.environ, 'FLOWGRAM_DATA_DIR': str(data / 'app'), 'FLOWGRAM_PORT': '0',
            'FLOWGRAM_SERVICE_DATA_DIR': str(data / 'service')}
     # This is an offline CLI operation that opens the standalone runtime's DB.
@@ -65,7 +67,18 @@ def main():
         data = Path(temporary)
         mounted = None
         try:
-            if target == 'x86_64-pc-windows-msvc':
+            sidecars = None
+            if target == 'x86_64-unknown-linux-gnu':
+                installers = list((bundle / 'deb').glob('*.deb'))
+                assert len(installers) == 1, 'Expected exactly one DEB installer'
+                extracted = data / 'installer'
+                subprocess.run(['dpkg-deb', '-x', str(installers[0]), str(extracted)],
+                               check=True, timeout=120)
+                servers = list(extracted.rglob('flowgram-server'))
+                assert len(servers) == 1, 'DEB must contain exactly one backend sidecar'
+                directory = servers[0].parent
+                sidecars = directory
+            elif target == 'x86_64-pc-windows-msvc':
                 installers = list((bundle / 'nsis').glob('*.exe'))
                 assert len(installers) == 1, 'Expected exactly one NSIS installer'
                 extracted = data / 'installer'
@@ -85,7 +98,7 @@ def main():
                                check=True, timeout=60)
                 mounted = mount
                 directory = mount / 'FlowGram.app' / 'Contents' / 'MacOS'
-            verify(directory, data)
+            verify(directory, data, sidecars)
         except BaseException:
             log = data / 'backend.log'
             if log.exists():

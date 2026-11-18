@@ -4,7 +4,7 @@
  */
 
 import { spawn, spawnSync } from 'node:child_process';
-import { copyFileSync, mkdirSync } from 'node:fs';
+import { chmodSync, copyFileSync, mkdirSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
@@ -19,7 +19,10 @@ const suffix = process.platform === 'win32' ? '.exe' : '';
 const binaries = resolve(root, 'apps/desktop/src-tauri/binaries');
 mkdirSync(binaries, { recursive: true });
 for (const binary of ['flowgram-server', 'flowgram-service']) {
-  copyFileSync(resolve(root, `target/${production ? 'release' : 'debug'}/${binary}${suffix}`), resolve(binaries, `${binary}-${target}${suffix}`));
+  const destination = resolve(binaries, `${binary}-${target}${suffix}`);
+  copyFileSync(resolve(root, `target/${production ? 'release' : 'debug'}/${binary}${suffix}`), destination);
+  // copyFileSync does not carry the source mode; Tauri's sidecars must stay executable on Unix.
+  if (process.platform !== 'win32') chmodSync(destination, 0o755);
 }
 if (production) run('node', ['../../common/scripts/install-run-rushx.js', 'build'], resolve(root, 'apps/desktop'));
 else {

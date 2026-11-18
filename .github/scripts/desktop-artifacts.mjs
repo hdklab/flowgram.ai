@@ -8,21 +8,22 @@ import { appendFileSync, copyFileSync, mkdirSync, readFileSync, readdirSync, wri
 import { join, resolve } from 'node:path';
 
 const target = process.env.DESKTOP_TARGET;
-const extensions = {
-  'aarch64-apple-darwin': '.dmg',
-  'x86_64-apple-darwin': '.dmg',
-  'x86_64-pc-windows-msvc': '.exe',
+const targets = {
+  'aarch64-apple-darwin': { extension: '.dmg', directory: 'dmg' },
+  'x86_64-apple-darwin': { extension: '.dmg', directory: 'dmg' },
+  'x86_64-pc-windows-msvc': { extension: '.exe', directory: 'nsis', suffix: '-setup' },
+  'x86_64-unknown-linux-gnu': { extension: '.AppImage', directory: 'appimage' },
 };
-assert.ok(Object.hasOwn(extensions, target), 'Unsupported desktop target');
+assert.ok(Object.hasOwn(targets, target), 'Unsupported desktop target');
 assert.ok(process.env.DESKTOP_ARTIFACT_DIR, 'Set DESKTOP_ARTIFACT_DIR');
 const { version } = JSON.parse(readFileSync('apps/desktop/src-tauri/tauri.conf.json', 'utf8'));
-const extension = extensions[target];
-const directory = join('target/release/bundle', extension === '.dmg' ? 'dmg' : 'nsis');
+const { extension, directory: bundleDirectory, suffix = '' } = targets[target];
+const directory = join('target/release/bundle', bundleDirectory);
 const installers = readdirSync(directory).filter((name) => name.endsWith(extension));
 assert.equal(installers.length, 1, 'Expected exactly one installer for the native target');
 const output = resolve(process.env.DESKTOP_ARTIFACT_DIR);
 mkdirSync(output, { recursive: true });
-const name = `FlowGram_${version}_${target}${extension === '.exe' ? '-setup' : ''}${extension}`;
+const name = `FlowGram_${version}_${target}${suffix}${extension}`;
 const source = join(directory, installers[0]);
 const content = readFileSync(source);
 assert.ok(content.length > 0, 'Installer is empty');

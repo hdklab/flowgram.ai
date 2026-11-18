@@ -18,6 +18,21 @@ impl OwnedProcess {
             use windows_sys::Win32::System::Threading::CREATE_NO_WINDOW;
             command.creation_flags(CREATE_NO_WINDOW);
         }
+        #[cfg(target_os = "linux")]
+        {
+            use std::os::unix::process::CommandExt;
+            // The kernel terminates the backend when this GUI process disappears, including
+            // crashes and SIGKILL, matching the Windows job object. A surviving backend would
+            // keep the data directory lock and block the next launch.
+            unsafe {
+                command.pre_exec(|| {
+                    if libc::prctl(libc::PR_SET_PDEATHSIG, libc::SIGKILL) == -1 {
+                        return Err(io::Error::last_os_error());
+                    }
+                    Ok(())
+                });
+            }
+        }
         let child = command.spawn()?;
         #[cfg(windows)]
         {

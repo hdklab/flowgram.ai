@@ -165,6 +165,109 @@ jobs:
           compression-level: 0
           retention-days: 14
 
+  package-linux:
+    name: Package (x86_64-unknown-linux-gnu)
+    runs-on: ubuntu-22.04
+    timeout-minutes: 90
+    defaults:
+      run:
+        shell: bash
+    env:
+      CI: 'true'
+      CARGO_TERM_COLOR: always
+      CARGO_BUILD_JOBS: '2'
+      CARGO_PROFILE_DEV_DEBUG: '0'
+      CARGO_PROFILE_TEST_DEBUG: '0'
+      CARGO_INCREMENTAL: '0'
+      RUST_TEST_THREADS: '1'
+      RUSH_PARALLELISM: '2'
+      PYTHONUTF8: '1'
+      FLOWGRAM_CONNECTION_FILE: ${{ github.workspace }}/.flowgram-ci-no-backend/connection.json
+
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: '22'
+          package-manager-cache: false
+
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.12'
+
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+        with:
+          toolchain: '1.97.0'
+          components: clippy
+
+      - name: Install Linux bundle dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential curl file libfuse2 libgtk-3-dev librsvg2-dev \
+            libssl-dev libwebkit2gtk-4.1-dev libxdo-dev patchelf rpm wget
+
+      - uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5
+        with:
+          path: common/temp/pnpm-store
+          key: desktop-pnpm-x86_64-unknown-linux-gnu-${{ hashFiles('common/config/rush/pnpm-lock.yaml', 'rush.json') }}
+          restore-keys: desktop-pnpm-x86_64-unknown-linux-gnu-
+
+      - uses: Swatinem/rust-cache@49a0bdc70d2e1b713ca9e2869b211fcce03d3c1c # v2
+        with:
+          workspaces: '. -> target'
+          key: desktop-x86_64-unknown-linux-gnu
+          cache-on-failure: false
+          save-if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+
+      - name: Install desktop dependencies from lockfile
+        run: node common/scripts/install-run-rush.js install --to @flowgram.ai/desktop
+
+      - name: Build workspace libraries
+        run: node common/scripts/install-run-rush.js build --to-except @flowgram.ai/desktop
+
+      - name: Test desktop frontend
+        working-directory: apps/desktop
+        run: node ../../common/scripts/install-run-rushx.js test
+
+      - name: Lint desktop frontend
+        working-directory: apps/desktop
+        run: node ../../common/scripts/install-run-rushx.js lint
+
+      - name: Check Rust
+        run: cargo clippy --locked -p flowgram-desktop-backend --all-targets -- -D warnings
+
+      - name: Test Rust backend and workflow runtime
+        run: cargo test --locked -p flowgram-desktop-backend
+
+      - name: Build native installers
+        working-directory: apps/desktop
+        # beforeBuildCommand builds and stages both Rust sidecars, then the UI.
+        run: node ../../common/scripts/install-run-rushx.js desktop:build --ci --bundles deb,rpm,appimage -- --locked
+
+      - name: Verify packaged runtime
+        env:
+          DESKTOP_TARGET: x86_64-unknown-linux-gnu
+        run: python .github/scripts/desktop-smoke.py
+
+      - name: Collect installer and checksum
+        env:
+          DESKTOP_TARGET: x86_64-unknown-linux-gnu
+          DESKTOP_ARTIFACT_DIR: ${{ runner.temp }}/flowgram-artifacts
+        run: node .github/scripts/desktop-artifacts.mjs
+
+      - name: Upload installers
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: FlowGram-x86_64-unknown-linux-gnu
+          path: ${{ runner.temp }}/flowgram-artifacts/
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 14
+
   publish-preview:
     name: Update Desktop preview assets
     needs: package
