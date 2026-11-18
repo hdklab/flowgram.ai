@@ -23,11 +23,16 @@ impl OwnedProcess {
             use std::os::unix::process::CommandExt;
             // The kernel terminates the backend when this GUI process disappears, including
             // crashes and SIGKILL, matching the Windows job object. A surviving backend would
-            // keep the data directory lock and block the next launch.
+            // keep the data directory lock and block the next launch. Only async-signal-safe
+            // calls are allowed between fork and exec, so failures exit without allocating.
+            let parent = std::process::id() as libc::pid_t;
             unsafe {
-                command.pre_exec(|| {
-                    if libc::prctl(libc::PR_SET_PDEATHSIG, libc::SIGKILL) == -1 {
-                        return Err(io::Error::last_os_error());
+                command.pre_exec(move || {
+                    // getppid() also covers a parent that died before prctl ran.
+                    if libc::prctl(libc::PR_SET_PDEATHSIG, libc::SIGKILL) == -1
+                        || libc::getppid() != parent
+                    {
+                        libc::_exit(1);
                     }
                     Ok(())
                 });

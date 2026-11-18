@@ -37,19 +37,19 @@ fn backend_connection(backend: tauri::State<'_, Backend>) -> Connection {
 
 /// Locate the packaged backend sidecar for every install layout.
 ///
-/// macOS and Windows bundles keep sidecars beside the GUI binary, while Linux
-/// deb/rpm/AppImage bundles install them into the resource directory
-/// (`/usr/lib/FlowGram` or `$APPDIR/usr/lib/FlowGram`).
+/// Bundles keep the sidecar beside the GUI binary; the Tauri resource directory
+/// (`/usr/lib/FlowGram` or `$APPDIR/usr/lib/FlowGram`) is also probed for
+/// installers that relocate external binaries.
 fn resolve_backend(app: &tauri::App) -> Result<PathBuf, Box<dyn std::error::Error>> {
+    let mut candidates = Vec::new();
     if let Some(configured) = std::env::var_os("FLOWGRAM_SERVER_BIN") {
-        return Ok(PathBuf::from(configured));
+        candidates.push(PathBuf::from(configured));
     }
     let name = if cfg!(windows) {
         "flowgram-server.exe"
     } else {
         "flowgram-server"
     };
-    let mut candidates = Vec::new();
     if let Ok(executable) = std::env::current_exe()
         && let Some(directory) = executable.parent()
     {
@@ -138,7 +138,7 @@ fn apply_linux_backend_override() {
     // Some compositors deliver no pointer events to WebKitGTK on Wayland, while
     // others break under XWayland. Let users pick the GTK backend explicitly.
     if let Ok(backend) = std::env::var("FLOWGRAM_GDK_BACKEND")
-        && !backend.is_empty()
+        && matches!(backend.as_str(), "x11" | "wayland")
     {
         unsafe { std::env::set_var("GDK_BACKEND", backend) };
     }
