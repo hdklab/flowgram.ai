@@ -140,7 +140,16 @@ fn apply_linux_backend_override() {
     if let Ok(backend) = std::env::var("FLOWGRAM_GDK_BACKEND")
         && matches!(backend.as_str(), "x11" | "wayland")
     {
-        unsafe { std::env::set_var("GDK_BACKEND", backend) };
+        unsafe { std::env::set_var("GDK_BACKEND", &backend) };
+        if backend == "wayland" {
+            // GDK_SCALE/GDK_DPI_SCALE are X11 scaling workarounds. On Wayland the
+            // compositor already scales the surface; keeping them shifts hit-testing
+            // so hover and clicks no longer reach the page.
+            unsafe {
+                std::env::remove_var("GDK_SCALE");
+                std::env::remove_var("GDK_DPI_SCALE");
+            }
+        }
     }
 }
 
