@@ -5,6 +5,6 @@ Comment={{comment}}
 Exec={{exec}}
 Icon={{icon}}
 Terminal=false
-Categories=Development;Utility;
+Categories=Development;
 Keywords=workflow;agent;AI;
 StartupWMClass={{exec}}
